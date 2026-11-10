@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: activation-codes
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py --init-db && gunicorn app:app --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: activation-db
+          property: connectionString
+      - key: ADMIN_SECRET
+        generateValue: true
+      - key: TOKEN_SECRET
+        generateValue: true
+
+databases:
+  - name: activation-db
+    plan: free
