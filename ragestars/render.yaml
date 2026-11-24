@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ragestars-activation
+    runtime: python
+    plan: free
+    rootDir: ragestars
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ragestars-db
+          property: connectionString
+      - key: ADMIN_SECRET
+        generateValue: true
+      - key: TOKEN_SECRET
+        generateValue: true
+
+databases:
+  - name: ragestars-db
+    plan: free
+    region: oregon
