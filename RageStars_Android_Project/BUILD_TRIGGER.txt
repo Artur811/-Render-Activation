@@ -1,0 +1,1 @@
+Trigger Android APK CI build for the RageStars companion project. This is a visual-only UI and licensing companion, not a patch to the original Brawl Stars APK.
