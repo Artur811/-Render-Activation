@@ -24,6 +24,15 @@ def db():
 def init_db():
     with db() as c: c.execute(DDL)
 
+def bootstrap_license():
+    code=os.environ.get("BOOTSTRAP_CODE","")
+    plan=os.environ.get("BOOTSTRAP_PLAN","week")
+    if not code: return
+    if not re.fullmatch(r"[A-F0-9]{32}",code) or plan not in PLANS:
+        raise RuntimeError("Invalid bootstrap license settings")
+    with db() as c:
+        c.execute("INSERT INTO ragestars_licenses(id,code_hash,code_hint,plan) VALUES(%s,%s,%s,%s) ON CONFLICT(code_hash) DO NOTHING",(str(uuid.uuid4()),digest(code),code[-6:],plan))
+
 def digest(s): return hashlib.sha256(s.encode()).hexdigest()
 def admin_ok():
     secret=os.environ.get("ADMIN_SECRET","")
@@ -150,6 +159,7 @@ def check():
 
 try:
     init_db()
+    bootstrap_license()
 except Exception:
     app.logger.exception("database initialization deferred")
 
