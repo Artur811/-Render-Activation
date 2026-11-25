@@ -67,7 +67,7 @@ button,input,select{font:inherit}button{cursor:pointer;border:0}.hidden{display:
   <main class="main" id="generated">
     <header class="topline">
       <div><div class="eyebrow">AUTHGUARD / LICENSE TOOLS</div><h1 class="heading">Generated Keys</h1><p class="description">Создание и просмотр одноразовых кодов активации</p></div>
-      <div class="create-tools"><div class="plan-picker"><label class="field-label" for="plan">ТАРИФ НОВОГО КОДА</label><select class="select-input" id="plan"><option value="trial">1 минута · тест · бесплатно</option><option value="week">1 неделя · 2 500 ֏</option><option value="month">1 месяц · 6 000 ֏</option></select></div><button class="primary create-btn" id="createBtn"><span class="plus">＋</span>Сгенерировать код</button></div>
+      <div class="create-tools"><div class="plan-picker"><label class="field-label" for="plan">ТАРИФ НОВОГО КОДА</label><select class="select-input" id="plan"><option value="trial">1 минута · тест · бесплатно</option><option value="week">1 неделя · 2 500 ֏</option><option value="month">1 месяц · 6 000 ֏</option><option value="lifetime">Навсегда · Lifetime · только админ</option></select></div><button class="primary create-btn" id="createBtn"><span class="plus">＋</span>Сгенерировать код</button></div>
     </header>
     <section class="card">
       <div class="toolbar">
@@ -96,7 +96,7 @@ function statusOf(row){if(row.revoked)return 'revoked';if(row.expired||(row.expi
 function formatDate(value){if(!value)return '—';const date=new Date(value);return isNaN(date)?'—':date.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function render(){const q=$('search').value.trim().toLowerCase();const filter=$('statusFilter').value;const size=Number($('pageSize').value);const filtered=allRows.filter(row=>{const st=statusOf(row);const text=[row.id,row.code_hint,row.code].join(' ').toLowerCase();return (!q||text.includes(q))&&(filter==='all'||st===filter)});const shown=filtered.slice(0,size);$('rowCount').textContent=`Показано ${shown.length} из ${filtered.length} записей`;
 if(!shown.length){$('rows').innerHTML='<tr><td colspan="7" class="empty">Коды не найдены. Нажмите «Сгенерировать код», чтобы создать первый.</td></tr>';return}
-$('rows').innerHTML=shown.map(row=>{const st=statusOf(row);const label=st==='revoked'?'Отключён':st==='expired'?'Срок истёк':st==='used'?'Активирован':'Не использован';const key=row.code?esc(row.code):(row.code_hint?`••••••${esc(row.code_hint)}`:`Старый код · ${esc(String(row.id).slice(0,8))}`);const device=row.used?'Привязан':'Не задан';return `<tr><td><span class="key-cell">${key}</span><div class="muted" style="font-size:9px;margin-top:4px">ID: ${esc(String(row.id).slice(0,8))}</div></td><td>${esc(row.plan_label||"Старый код · без срока")}</td><td>${esc(formatDate(row.created_at))}</td><td class="expiry-cell">${row.expires_at?esc(formatDate(row.expires_at)):(row.plan==='legacy'?'Без срока':'Отсчёт после активации')}</td><td><span class="status ${st}">${label}</span></td><td>${device}</td><td><div class="actions">${row.code?`<button class="mini-btn" data-copy="${esc(row.id)}">Копировать</button>`:''}<button class="mini-btn" data-detail="${esc(row.id)}">Подробнее</button>${st!=='revoked'?`<button class="mini-btn danger" data-revoke="${esc(row.id)}">Отключить</button>`:''}</div></td></tr>`}).join('');
+$('rows').innerHTML=shown.map(row=>{const st=statusOf(row);const label=st==='revoked'?'Отключён':st==='expired'?'Срок истёк':st==='used'?'Активирован':'Не использован';const key=row.code?esc(row.code):(row.code_hint?`••••••${esc(row.code_hint)}`:`Старый код · ${esc(String(row.id).slice(0,8))}`);const device=row.used?'Привязан':'Не задан';return `<tr><td><span class="key-cell">${key}</span><div class="muted" style="font-size:9px;margin-top:4px">ID: ${esc(String(row.id).slice(0,8))}</div></td><td>${esc(row.plan_label||"Старый код · без срока")}</td><td>${esc(formatDate(row.created_at))}</td><td class="expiry-cell">${row.expires_at?esc(formatDate(row.expires_at)):(['legacy','lifetime'].includes(row.plan)?'Без срока':'Отсчёт после активации')}</td><td><span class="status ${st}">${label}</span></td><td>${device}</td><td><div class="actions">${row.code?`<button class="mini-btn" data-copy="${esc(row.id)}">Копировать</button>`:''}<button class="mini-btn" data-detail="${esc(row.id)}">Подробнее</button>${st!=='revoked'?`<button class="mini-btn danger" data-revoke="${esc(row.id)}">Отключить</button>`:''}</div></td></tr>`}).join('');
 }
 async function loadRows(){ $('rows').innerHTML='<tr><td colspan="7" class="empty">Загружаем коды…</td></tr>';try{const data=await api('/admin/list');allRows=data.results||[];render()}catch(e){$('rows').innerHTML=`<tr><td colspan="7" class="empty">${esc(e.message)}</td></tr>`;toast(e.message)}}
 async function login(){const val=$('password').value.trim();if(!val){$('loginError').textContent='Введите пароль.';return}$('loginBtn').disabled=true;$('loginError').textContent='Проверяем доступ…';adminSecret=val;try{const data=await api('/admin/list');allRows=data.results||[];$('loginScreen').classList.add('hidden');$('appScreen').classList.remove('hidden');$('loginError').textContent='';$('password').value='';render()}catch(e){adminSecret='';$('loginError').textContent=e.message;$('password').focus()}finally{$('loginBtn').disabled=false}}
@@ -117,7 +117,7 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS licenses (
     revoked BOOLEAN NOT NULL DEFAULT FALSE
 )"""
 
-PLANS = {'trial': 'Тест · 1 минута', 'week': '1 неделя', 'month': '1 месяц', 'legacy': 'Старый код · без срока'}
+PLANS = {'trial': 'Тест · 1 минута', 'week': '1 неделя', 'month': '1 месяц', 'lifetime': 'Навсегда · Lifetime', 'legacy': 'Старый код · без срока'}
 _schema_ready = False
 _schema_lock = threading.Lock()
 
@@ -162,7 +162,7 @@ def expiration_for(start, plan):
     if start.tzinfo is None:
         raise ValueError('Activation timestamp must be timezone-aware')
     start = start.astimezone(timezone.utc)
-    if plan == 'legacy':
+    if plan in ('legacy', 'lifetime'):
         return None
     if plan == 'trial':
         return start + timedelta(minutes=1)
@@ -255,8 +255,8 @@ def api(path):
         with connect() as connection:
             if path == 'admin/create':
                 plan = body.get('plan')
-                if not isinstance(plan, str) or plan not in ('trial', 'week', 'month'):
-                    return jsonify(error='Выберите тест, неделю или месяц.'), 400
+                if not isinstance(plan, str) or plan not in ('trial', 'week', 'month', 'lifetime'):
+                    return jsonify(error='Выберите тест, неделю, месяц или навсегда.'), 400
                 code = secrets.token_hex(24)
                 license_id = str(uuid.uuid4())
                 connection.execute(
@@ -352,7 +352,7 @@ def api(path):
             if not row or not token_valid or row['revoked']:
                 return jsonify(active=False, reason='invalid'), 403
             # Fail closed for malformed limited plans without an expiration.
-            if row['expired'] or (row['plan'] != 'legacy' and row['expires_at'] is None):
+            if row['expired'] or (row['plan'] not in ('legacy', 'lifetime') and row['expires_at'] is None):
                 return jsonify(active=False, reason='expired', expires_at=iso(row['expires_at'])), 403
             return jsonify(active=True, plan=row['plan'], expires_at=iso(row['expires_at']))
 
