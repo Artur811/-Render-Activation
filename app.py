@@ -67,7 +67,7 @@ button,input,select{font:inherit}button{cursor:pointer;border:0}.hidden{display:
   <main class="main" id="generated">
     <header class="topline">
       <div><div class="eyebrow">AUTHGUARD / LICENSE TOOLS</div><h1 class="heading">Generated Keys</h1><p class="description">Создание и просмотр одноразовых кодов активации</p></div>
-      <div class="create-tools"><div class="plan-picker"><label class="field-label" for="plan">ТАРИФ НОВОГО КОДА</label><select class="select-input" id="plan"><option value="week">1 неделя · 7 суток</option><option value="month">1 календарный месяц</option></select></div><button class="primary create-btn" id="createBtn"><span class="plus">＋</span>Сгенерировать код</button></div>
+      <div class="create-tools"><div class="plan-picker"><label class="field-label" for="plan">ТАРИФ НОВОГО КОДА</label><select class="select-input" id="plan"><option value="trial">1 минута · тест · бесплатно</option><option value="week">1 неделя · 2 500 ֏</option><option value="month">1 месяц · 6 000 ֏</option></select></div><button class="primary create-btn" id="createBtn"><span class="plus">＋</span>Сгенерировать код</button></div>
     </header>
     <section class="card">
       <div class="toolbar">
@@ -78,7 +78,7 @@ button,input,select{font:inherit}button{cursor:pointer;border:0}.hidden{display:
       </div>
       <div class="table-wrap"><table><thead><tr><th>Код / метка</th><th>Тариф</th><th>Создан</th><th>Доступ до</th><th>Статус</th><th>Устройство</th><th>Действия</th></tr></thead><tbody id="rows"><tr><td colspan="7" class="empty">Загружаем коды…</td></tr></tbody></table></div>
       <div class="table-foot"><span id="rowCount">—</span><span>Даты показаны в часовом поясе вашего браузера.</span></div>
-    <div class="tariff-notice">Срок начинается с первой активации, а не с генерации кода. Неделя — 7 суток; месяц — календарный (расчёт по UTC). Старые коды сохраняют прежний доступ без срока: при необходимости отключите их и выдайте новые.</div></section>
+    <div class="tariff-notice"><b>Тарифы RageStars (видны только в админ-панели):</b> тест 1 минута — бесплатно · 7 дней — 2 500 ֏ · 30 дней — 6 000 ֏ · навсегда — только администратор.<br>Срок начинается с первой активации. Тест доступен один раз на установку.</div></section>
     <p class="notice">Одноразовый код привязывается к первому устройству, которое успешно его активирует. После этого другой установке он не подойдёт.</p>
   </main>
 </div>
@@ -117,7 +117,7 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS licenses (
     revoked BOOLEAN NOT NULL DEFAULT FALSE
 )"""
 
-PLANS = {'week': '1 неделя', 'month': '1 календарный месяц', 'legacy': 'Старый код · без срока'}
+PLANS = {'trial': 'Тест · 1 минута', 'week': '1 неделя', 'month': '1 месяц', 'legacy': 'Старый код · без срока'}
 _schema_ready = False
 _schema_lock = threading.Lock()
 
@@ -142,6 +142,7 @@ def ensure_schema(connection):
     # No retroactive expiry: existing codes retain their previous access.
     connection.execute("ALTER TABLE licenses ADD COLUMN IF NOT EXISTS plan VARCHAR(16) NOT NULL DEFAULT 'legacy'")
     connection.execute('ALTER TABLE licenses ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ')
+    connection.execute('CREATE TABLE IF NOT EXISTS trial_claims (installation_hash TEXT PRIMARY KEY, claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW())')
 
 
 def ensure_database():
@@ -163,6 +164,8 @@ def expiration_for(start, plan):
     start = start.astimezone(timezone.utc)
     if plan == 'legacy':
         return None
+    if plan == 'trial':
+        return start + timedelta(minutes=1)
     if plan == 'week':
         return start + timedelta(days=7)
     if plan == 'month':
@@ -252,8 +255,8 @@ def api(path):
         with connect() as connection:
             if path == 'admin/create':
                 plan = body.get('plan')
-                if not isinstance(plan, str) or plan not in ('week', 'month'):
-                    return jsonify(error='Выберите тариф: 1 неделя или 1 календарный месяц.'), 400
+                if not isinstance(plan, str) or plan not in ('trial', 'week', 'month'):
+                    return jsonify(error='Выберите тест, неделю или месяц.'), 400
                 code = secrets.token_hex(24)
                 license_id = str(uuid.uuid4())
                 connection.execute(
@@ -308,6 +311,13 @@ def api(path):
                 ).fetchone()
                 if not row or row['revoked'] or row['installation_hash'] not in (None, installation_hash):
                     return jsonify(error='Код неверный, отключён или уже использован другой установкой.', reason='invalid'), 403
+                if row['plan'] == 'trial':
+                    claimed = connection.execute(
+                        'INSERT INTO trial_claims(installation_hash) VALUES (%s) ON CONFLICT DO NOTHING RETURNING installation_hash',
+                        (installation_hash,)
+                    ).fetchone()
+                    if not claimed and row['activated_at'] is None:
+                        return jsonify(error='Бесплатный тест уже использован на этой установке.', reason='trial_used'), 403
                 # Read the actual database clock AFTER taking the row lock.
                 now = connection.execute('SELECT clock_timestamp() AS now').fetchone()['now']
                 activated_at = row['activated_at'] or now
