@@ -7,6 +7,7 @@ import base64
 import calendar
 import re
 import threading
+import time
 from datetime import timedelta, timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -359,6 +360,29 @@ def api(path):
     except Exception:
         app.logger.exception('Request failed')
         return jsonify(error='Ошибка сервера или базы данных. Проверьте журналы Render.'), 503
+
+
+def cleanup_expired_licenses_loop():
+    """Permanently remove licenses 48 hours after their access expires."""
+    while True:
+        try:
+            ensure_database()
+            with connect() as connection:
+                deleted = connection.execute(
+                    """DELETE FROM licenses
+                       WHERE expires_at IS NOT NULL
+                         AND expires_at <= NOW() - INTERVAL '2 days'
+                       RETURNING id"""
+                ).fetchall()
+                if deleted:
+                    app.logger.info("Removed %s licenses expired for at least 48 hours.", len(deleted))
+        except Exception:
+            app.logger.exception("Scheduled expired-license cleanup failed")
+        time.sleep(3600)
+
+
+# Run in each Gunicorn worker; concurrent DELETEs are safe and idempotent.
+threading.Thread(target=cleanup_expired_licenses_loop, name='license-cleanup', daemon=True).start()
 
 
 if __name__ == '__main__':
